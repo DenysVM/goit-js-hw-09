@@ -1,7 +1,6 @@
-// Импортируем flatpickr и его стили
 import flatpickr from "flatpickr";
 import "flatpickr/dist/flatpickr.min.css";
-import Notiflix from "notiflix"; // Импортируем notiflix
+import Notiflix from "notiflix";
 
 const datetimePicker = document.getElementById("datetime-picker");
 const startButton = document.querySelector("[data-start]");
@@ -10,20 +9,17 @@ const hoursValue = document.querySelector("[data-hours]");
 const minutesValue = document.querySelector("[data-minutes]");
 const secondsValue = document.querySelector("[data-seconds]");
 
-// Функция додавания нуля перед числом, если оно меньше 10
 function addLeadingZero(value) {
     return String(value).padStart(2, "0");
 }
 
-// Функция підрахунку часу до кінцевої дати
 function calculateTimeRemaining(endDate) {
     const currentTime = new Date().getTime();
     const endTime = new Date(endDate).getTime();
     const timeRemaining = endTime - currentTime;
 
     if (timeRemaining <= 0) {
-        // Если выбранная дата в прошлом, показываем сообщение с помощью notiflix
-        Notiflix.Report.warning("Warning", "Please choose a date in the future", "OK");
+        Notiflix.Notify.failure('Please choose a date in the future');
         return null;
     }
 
@@ -31,7 +27,6 @@ function calculateTimeRemaining(endDate) {
     return { days, hours, minutes, seconds };
 }
 
-// Функция перевода миллисекунд в дни, часы, минуты и секунды
 function convertMs(ms) {
     const second = 1000;
     const minute = second * 60;
@@ -46,7 +41,6 @@ function convertMs(ms) {
     return { days, hours, minutes, seconds };
 }
 
-// Функция обновления значений таймера на странице
 function updateTimerDisplay(time) {
     daysValue.textContent = addLeadingZero(time.days);
     hoursValue.textContent = addLeadingZero(time.hours);
@@ -54,41 +48,62 @@ function updateTimerDisplay(time) {
     secondsValue.textContent = addLeadingZero(time.seconds);
 }
 
-// Инициализация flatpickr
+let timerId;
+function updateTimer(endDate) {
+    const intervalId = setInterval(() => {
+        const timeRemaining = calculateTimeRemaining(endDate);
+        if (timeRemaining) {
+            updateTimerDisplay(timeRemaining);
+        } else {
+            clearInterval(intervalId);
+            startButton.removeAttribute("disabled");
+        }
+    }, 1000);
+
+    return intervalId;
+}
+
 const options = {
     enableTime: true,
     time_24hr: true,
     defaultDate: new Date(),
     minuteIncrement: 1,
     onClose(selectedDates) {
-        const endDate = selectedDates[0];
-        if (endDate) {
-            const timeRemaining = calculateTimeRemaining(endDate);
-            if (timeRemaining) {
-                startButton.removeAttribute("disabled");
-                updateTimerDisplay(timeRemaining);
-            }
+        if (selectedDates[0] < new Date()) {
+            Notiflix.Notify.failure('Please choose a date in the future');
+            return;
         }
+        startButton.removeAttribute('disabled');
+
+        const showTimer = () => {
+            const now = new Date();
+            localStorage.setItem('selectedData', selectedDates[0]);
+            const selectData = new Date(localStorage.getItem('selectedData'));
+
+            if (!selectData) return;
+
+            const diff = selectData - now;
+            const { days, hours, minutes, seconds } = convertMs(diff);
+            daysValue.textContent = addLeadingZero(days);
+            hoursValue.textContent = addLeadingZero(hours);
+            minutesValue.textContent = addLeadingZero(minutes);
+            secondsValue.textContent = addLeadingZero(seconds);
+
+            if (daysValue.textContent === '00' && hoursValue.textContent === '00' && minutesValue.textContent === '00' && secondsValue.textContent === '00') {
+                clearInterval(timerId);
+            }
+        };
+
+        const onClick = () => {
+            if (timerId) {
+                clearInterval(timerId);
+            }
+            showTimer();
+            timerId = setInterval(showTimer, 1000);
+        };
+
+        startButton.addEventListener('click', onClick);
     },
 };
 
-flatpickr("#datetime-picker", options);
-
-// Обработчик нажатия кнопки "Start"
-startButton.addEventListener("click", () => {
-    const endDate = flatpickr.parseDate(datetimePicker.value);
-    const timeRemaining = calculateTimeRemaining(endDate);
-    if (timeRemaining) {
-        startButton.setAttribute("disabled", true);
-
-        const intervalId = setInterval(() => {
-            const updatedTime = calculateTimeRemaining(endDate);
-            if (updatedTime) {
-                updateTimerDisplay(updatedTime);
-            } else {
-                clearInterval(intervalId);
-                startButton.removeAttribute("disabled");
-            }
-        }, 1000);
-    }
-});
+flatpickr('#datetime-picker', { ...options });
